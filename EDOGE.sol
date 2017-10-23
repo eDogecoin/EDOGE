@@ -122,12 +122,12 @@ contract EDOGE is ERC223, SafeMath {
     function distributeAirdrop(address[] addresses, uint256 amount) onlyOwner {
         // Only proceed if there are enough tokens to be distributed to all addresses
         // Never allow balance of owner to become negative
-        require(balances[owner] >= addresses.length * amount);
+        require(balances[owner] >= safeMul(addresses.length, amount));
         for (uint i = 0; i < addresses.length; i++) {
-            balances[owner] -= amount;
+            balances[owner] = safeSub(balanceOf(owner), amount);
             // Another sanity check to make sure owner balance can never be negative
             require(balances[owner] >= 0);
-            balances[addresses[i]] += amount;
+            balances[addresses[i]] = safeAdd(balanceOf(addresses[i]), amount);
             Transfer(owner, addresses[i], amount);
         }
     }
