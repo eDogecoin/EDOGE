@@ -87,6 +87,8 @@ contract EDOGE is ERC223, SafeMath {
 
     bool public unlocked = false;
 
+    bool public tokenCreated = false;
+
     mapping(address => uint256) balances;
 
     mapping(address => mapping (address => uint256)) allowed;
@@ -94,8 +96,17 @@ contract EDOGE is ERC223, SafeMath {
     // Initialize to have owner have 100,000,000,000 EDOGE on contract creation
     // Constructor is called only once and can not be called again (Ethereum Solidity specification)
     function EDOGE() {
+
+        // Security check in case EVM has future flaw or exploit to call constructor multiple times
+        // Ensure token gets created once only
+        require(tokenCreated == false);
+        tokenCreated = true;
+
         owner = msg.sender;
         balances[owner] = totalSupply;
+
+        // Final sanity check to ensure owner balance is greater than zero
+        require(balances[owner] > 0);
     }
 
     modifier onlyOwner() {
