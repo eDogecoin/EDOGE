@@ -85,14 +85,17 @@ contract EDOGE is ERC223, SafeMath {
 
     address public owner;
 
+    bool public unlocked = false;
+
     mapping(address => uint256) balances;
 
     mapping(address => mapping (address => uint256)) allowed;
 
     // Initialize to have owner have 100,000,000,000 EDOGE on contract creation
+    // Constructor is called only once and can not be called again (Ethereum Solidity specification)
     function EDOGE() {
         owner = msg.sender;
-        balances[owner] = 100000000000 * 10**8;
+        balances[owner] = totalSupply;
     }
 
     modifier onlyOwner() {
@@ -105,8 +108,7 @@ contract EDOGE is ERC223, SafeMath {
     // - Balance of owner cannot be negative
     // - All transfers can be fulfilled with remaining owner balance
     // - No new tokens can ever be minted except originally created 100,000,000,000
-    function distributeEDOGE(address[] addresses, uint256 amount) onlyOwner {
-
+    function distributeAirdrop(address[] addresses, uint256 amount) onlyOwner {
         // Only proceed if there are enough tokens to be distributed to all addresses
         // Never allow balance of owner to become negative
         require(balances[owner] >= addresses.length * amount);
@@ -139,6 +141,10 @@ contract EDOGE is ERC223, SafeMath {
     // Function that is called when a user or another contract wants to transfer funds .
     function transfer(address _to, uint _value, bytes _data, string _custom_fallback) returns (bool success) {
 
+        // Only allow transfer once unlocked
+        // Once it is unlocked, it is unlocked forever and no one can lock again
+        require(unlocked);
+
         if (isContract(_to)) {
             if (balanceOf(msg.sender) < _value) throw;
             balances[msg.sender] = safeSub(balanceOf(msg.sender), _value);
@@ -156,6 +162,10 @@ contract EDOGE is ERC223, SafeMath {
     // Function that is called when a user or another contract wants to transfer funds .
     function transfer(address _to, uint _value, bytes _data) returns (bool success) {
 
+        // Only allow transfer once unlocked
+        // Once it is unlocked, it is unlocked forever and no one can lock again
+        require(unlocked);
+
         if (isContract(_to)) {
             return transferToContract(_to, _value, _data);
         }
@@ -167,6 +177,10 @@ contract EDOGE is ERC223, SafeMath {
     // Standard function transfer similar to ERC20 transfer with no _data .
     // Added due to backwards compatibility reasons .
     function transfer(address _to, uint _value) returns (bool success) {
+
+        // Only allow transfer once unlocked
+        // Once it is unlocked, it is unlocked forever and no one can lock again
+        require(unlocked);
 
         //standard function transfer similar to ERC20 transfer with no _data
         //added due to backwards compatibility reasons
@@ -212,5 +226,11 @@ contract EDOGE is ERC223, SafeMath {
     // Get balance of the address provided
     function balanceOf(address _owner) constant returns (uint balance) {
         return balances[_owner];
+    }
+
+     // Creator/Owner can unlocked it once and it can never be locked again
+     // Use after airdrop is complete
+    function unlockForever() onlyOwner {
+        unlocked = true;
     }
 }
