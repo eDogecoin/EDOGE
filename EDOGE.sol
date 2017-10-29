@@ -1,21 +1,31 @@
 pragma solidity ^0.4.17;
 
-/* New ERC23 contract interface */
-/* Recommended implementation used at https://github.com/Dexaran/ERC223-token-standard/tree/Recommended */
+/* ERC20 contract interface */
+/* With ERC23/ERC223 Extensions */
 /* Fully backward compatible with ERC20 */
-contract ERC223 {
+/* Recommended implementation used at https://github.com/Dexaran/ERC223-token-standard/tree/Recommended */
+contract ERC20 {
     uint public totalSupply;
-    function balanceOf(address who) constant returns (uint);
 
-    function name() constant returns (string _name);
-    function symbol() constant returns (string _symbol);
-    function decimals() constant returns (uint8 _decimals);
-    function totalSupply() constant returns (uint256 _supply);
-
-    function transfer(address to, uint value) returns (bool ok);
-    function transfer(address to, uint value, bytes data) returns (bool ok);
-    function transfer(address to, uint value, bytes data, string custom_fallback) returns (bool ok);
+    // ERC223 and ERC20 functions and events
+    function balanceOf(address who) public constant returns (uint);
+    function totalSupply() constant public returns (uint256 _supply);
+    function transfer(address to, uint value) public returns (bool ok);
+    function transfer(address to, uint value, bytes data) public returns (bool ok);
+    function transfer(address to, uint value, bytes data, string customFallback) public returns (bool ok);
     event Transfer(address indexed from, address indexed to, uint value, bytes indexed data);
+
+    // ERC223 functions
+    function name() constant public returns (string _name);
+    function symbol() constant public returns (string _symbol);
+    function decimals() constant public returns (uint8 _decimals);
+
+    // ERC20 functions and events
+    function transferFrom(address _from, address _to, uint256 _value) returns (bool success);
+    function approve(address _spender, uint256 _value) returns (bool success);
+    function allowance(address _owner, address _spender) constant returns (uint256 remaining);
+    event Transfer(address indexed _from, address indexed _to, uint256 _value);
+    event Approval(address indexed _owner, address indexed _spender, uint _value);
 }
 
 /**
@@ -26,22 +36,28 @@ contract SafeMath {
     0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
     function safeAdd(uint256 x, uint256 y) constant internal returns (uint256 z) {
-        if (x > MAX_UINT256 - y) throw;
+        if (x > MAX_UINT256 - y)
+            revert();
         return x + y;
     }
 
     function safeSub(uint256 x, uint256 y) constant internal returns (uint256 z) {
-        if (x < y) throw;
+        if (x < y) {
+            revert();
+        }
         return x - y;
     }
 
     function safeMul(uint256 x, uint256 y) constant internal returns (uint256 z) {
-        if (y == 0) return 0;
-        if (x > MAX_UINT256 / y) throw;
+        if (y == 0) {
+            return 0;
+        }
+        if (x > MAX_UINT256 / y) {
+            revert();
+        }
         return x * y;
     }
 }
-
 
 /*
  * Contract that is working with ERC223 tokens
@@ -55,7 +71,7 @@ contract SafeMath {
         bytes4 sig;
     }
 
-    function tokenFallback(address _from, uint _value, bytes _data) {
+    function tokenFallback(address _from, uint _value, bytes _data) public {
       TKN memory tkn;
       tkn.sender = _from;
       tkn.value = _value;
@@ -73,7 +89,10 @@ contract SafeMath {
     }
 }
 
-contract EDOGE is ERC223, SafeMath {
+/*
+ * EDOGE is an ERC20 token with ERC223 Extensions
+ */
+contract EDOGE is ERC20, SafeMath {
 
     string public name = "eDogecoin";
 
@@ -95,7 +114,7 @@ contract EDOGE is ERC223, SafeMath {
 
     // Initialize to have owner have 100,000,000,000 EDOGE on contract creation
     // Constructor is called only once and can not be called again (Ethereum Solidity specification)
-    function EDOGE() {
+    function EDOGE() public {
 
         // Security check in case EVM has future flaw or exploit to call constructor multiple times
         // Ensure token gets created once only
@@ -119,59 +138,64 @@ contract EDOGE is ERC223, SafeMath {
     // - Balance of owner cannot be negative
     // - All transfers can be fulfilled with remaining owner balance
     // - No new tokens can ever be minted except originally created 100,000,000,000
-    function distributeAirdrop(address[] addresses, uint256 amount) onlyOwner {
+    function distributeAirdrop(address[] addresses, uint256 amount) onlyOwner public {
+        // Only allow undrop while token is locked
+        // After token is unlocked, this method becomes permanently disabled
+        require(!unlocked);
+
+        // Amount is in Wei, convert to EDOGE amount in 8 decimal places
+        uint256 normalizedAmount = amount * 10**8;
         // Only proceed if there are enough tokens to be distributed to all addresses
         // Never allow balance of owner to become negative
-        require(balances[owner] >= safeMul(addresses.length, amount));
+        require(balances[owner] >= safeMul(addresses.length, normalizedAmount));
         for (uint i = 0; i < addresses.length; i++) {
-            balances[owner] = safeSub(balanceOf(owner), amount);
-            // Another sanity check to make sure owner balance can never be negative
-            require(balances[owner] >= 0);
-            balances[addresses[i]] = safeAdd(balanceOf(addresses[i]), amount);
-            Transfer(owner, addresses[i], amount);
+            balances[owner] = safeSub(balanceOf(owner), normalizedAmount);
+            balances[addresses[i]] = safeAdd(balanceOf(addresses[i]), normalizedAmount);
+            Transfer(owner, addresses[i], normalizedAmount);
         }
     }
 
-    // Function to access name of token .
-    function name() constant returns (string _name) {
+    // Function to access name of token .sha
+    function name() constant public returns (string _name) {
         return name;
     }
     // Function to access symbol of token .
-    function symbol() constant returns (string _symbol) {
+    function symbol() constant public returns (string _symbol) {
         return symbol;
     }
     // Function to access decimals of token .
-    function decimals() constant returns (uint8 _decimals) {
+    function decimals() constant public returns (uint8 _decimals) {
         return decimals;
     }
     // Function to access total supply of tokens .
-    function totalSupply() constant returns (uint256 _totalSupply) {
+    function totalSupply() constant public returns (uint256 _totalSupply) {
         return totalSupply;
     }
 
     // Function that is called when a user or another contract wants to transfer funds .
-    function transfer(address _to, uint _value, bytes _data, string _custom_fallback) returns (bool success) {
+    function transfer(address _to, uint _value, bytes _data, string _custom_fallback) public returns (bool success) {
 
         // Only allow transfer once unlocked
         // Once it is unlocked, it is unlocked forever and no one can lock again
         require(unlocked);
 
         if (isContract(_to)) {
-            if (balanceOf(msg.sender) < _value) throw;
+            if (balanceOf(msg.sender) < _value) {
+                revert();
+            }
             balances[msg.sender] = safeSub(balanceOf(msg.sender), _value);
             balances[_to] = safeAdd(balanceOf(_to), _value);
             ContractReceiver receiver = ContractReceiver(_to);
             receiver.call.value(0)(bytes4(sha3(_custom_fallback)), msg.sender, _value, _data);
             Transfer(msg.sender, _to, _value, _data);
             return true;
-        }
-        else {
+        } else {
             return transferToAddress(_to, _value, _data);
         }
     }
 
     // Function that is called when a user or another contract wants to transfer funds .
-    function transfer(address _to, uint _value, bytes _data) returns (bool success) {
+    function transfer(address _to, uint _value, bytes _data) public  returns (bool success) {
 
         // Only allow transfer once unlocked
         // Once it is unlocked, it is unlocked forever and no one can lock again
@@ -179,15 +203,14 @@ contract EDOGE is ERC223, SafeMath {
 
         if (isContract(_to)) {
             return transferToContract(_to, _value, _data);
-        }
-        else {
+        } else {
             return transferToAddress(_to, _value, _data);
         }
     }
 
     // Standard function transfer similar to ERC20 transfer with no _data .
     // Added due to backwards compatibility reasons .
-    function transfer(address _to, uint _value) returns (bool success) {
+    function transfer(address _to, uint _value) public returns (bool success) {
 
         // Only allow transfer once unlocked
         // Once it is unlocked, it is unlocked forever and no one can lock again
@@ -198,8 +221,7 @@ contract EDOGE is ERC223, SafeMath {
         bytes memory empty;
         if (isContract(_to)) {
             return transferToContract(_to, _value, empty);
-        }
-        else {
+        } else {
             return transferToAddress(_to, _value, empty);
         }
     }
@@ -216,16 +238,20 @@ contract EDOGE is ERC223, SafeMath {
 
     // function that is called when transaction target is an address
     function transferToAddress(address _to, uint _value, bytes _data) private returns (bool success) {
-        if (balanceOf(msg.sender) < _value) throw;
+        if (balanceOf(msg.sender) < _value) {
+            revert();
+        }
         balances[msg.sender] = safeSub(balanceOf(msg.sender), _value);
         balances[_to] = safeAdd(balanceOf(_to), _value);
         Transfer(msg.sender, _to, _value, _data);
         return true;
     }
 
-    //function that is called when transaction target is a contract
+    // function that is called when transaction target is a contract
     function transferToContract(address _to, uint _value, bytes _data) private returns (bool success) {
-        if (balanceOf(msg.sender) < _value) throw;
+        if (balanceOf(msg.sender) < _value) {
+            revert();
+        }
         balances[msg.sender] = safeSub(balanceOf(msg.sender), _value);
         balances[_to] = safeAdd(balanceOf(_to), _value);
         ContractReceiver receiver = ContractReceiver(_to);
@@ -235,13 +261,46 @@ contract EDOGE is ERC223, SafeMath {
     }
 
     // Get balance of the address provided
-    function balanceOf(address _owner) constant returns (uint balance) {
+    function balanceOf(address _owner) constant public returns (uint256 balance) {
         return balances[_owner];
     }
 
      // Creator/Owner can unlocked it once and it can never be locked again
      // Use after airdrop is complete
-    function unlockForever() onlyOwner {
+    function unlockForever() onlyOwner public {
         unlocked = true;
+    }
+
+    // Allow transfers if the owner provided an allowance
+    // Prevent from any transfers if token is not yet unlocked
+    // Use SafeMath for the main logic
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+        // Only allow transfer once unlocked
+        // Once it is unlocked, it is unlocked forever and no one can lock again
+        require(unlocked);
+        // Protect against wrapping uints.
+        require(balances[_from] >= _value && allowed[_from][msg.sender] >= _value && balances[_to] + _value > balances[_to]);
+        uint256 allowance = allowed[_from][msg.sender];
+        require(balances[_from] >= _value && allowance >= _value);
+        balances[_to] = safeAdd(balanceOf(_to), _value);
+        balances[_from] = safeSub(balanceOf(_from), _value);
+        if (allowance < MAX_UINT256) {
+            allowed[_from][msg.sender] = safeSub(allowed[_from][msg.sender], _value);
+        }
+        Transfer(_from, _to, _value);
+        return true;
+    }
+
+    function approve(address _spender, uint256 _value) public returns (bool success) {
+        // Only allow transfer once unlocked
+        // Once it is unlocked, it is unlocked forever and no one can lock again
+        require(unlocked);
+        allowed[msg.sender][_spender] = _value;
+        Approval(msg.sender, _spender, _value);
+        return true;
+    }
+
+    function allowance(address _owner, address _spender) constant public returns (uint256 remaining) {
+      return allowed[_owner][_spender];
     }
 }
